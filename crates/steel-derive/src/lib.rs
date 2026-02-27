@@ -1123,7 +1123,7 @@ fn function_inner(
 
     let ret_val = match return_type {
         ReturnType::Default => quote! {
-            Ok(SteelVal::Void)
+            Ok(#prefix::rvals::SteelVal::Void)
         },
         ReturnType::Type(_, r) => {
             if let Type::Path(val) = *r {
@@ -1131,19 +1131,21 @@ fn function_inner(
                 if let Some(last) = last {
                     match last.ident.into_token_stream().to_string().as_str() {
                         "Result" => quote! { res },
-                        _ => quote! {
+                        _ => quote! { {
+                            use #prefix::rvals::IntoSteelVal;
                             res.into_steelval().map_err(err_thunk)
-                        },
+                        } },
                     }
                 } else {
                     quote! {
-                        Ok(SteelVal::Void)
+                        Ok(#prefix::rvals::SteelVal::Void)
                     }
                 }
             } else {
-                quote! {
+                quote! { {
+                    use #prefix::rvals::IntoSteelVal;
                     res.into_steelval().map_err(err_thunk)
-                }
+                } }
             }
         }
     };
@@ -1366,7 +1368,7 @@ fn function_inner(
 
                 #definition_struct
 
-                pub fn #copied_function_name(args: &mut [SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
+                pub fn #copied_function_name(args: &mut [#prefix::rvals::SteelVal]) -> std::result::Result<#prefix::rvals::SteelVal, #prefix::rerrs::SteelErr> {
 
                     use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef, PrimitiveAsRefMut};
 
@@ -1427,7 +1429,7 @@ fn function_inner(
 
         #definition_struct
 
-        pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
+        pub fn #copied_function_name(args: &[#prefix::rvals::SteelVal]) -> std::result::Result<#prefix::rvals::SteelVal, #prefix::rerrs::SteelErr> {
 
             use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
 
