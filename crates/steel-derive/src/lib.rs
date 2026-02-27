@@ -1311,7 +1311,7 @@ fn function_inner(
 
             #definition_struct
 
-            pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
+            pub fn #copied_function_name(args: &[#prefix::rvals::SteelVal]) -> std::result::Result<#prefix::rvals::SteelVal, #prefix::rerrs::SteelErr> {
 
                 use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
 
