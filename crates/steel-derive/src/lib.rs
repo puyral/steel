@@ -707,9 +707,25 @@ fn parse_doc_comment(input: ItemFn) -> Option<proc_macro2::TokenStream> {
 }
 
 #[proc_macro_attribute]
+pub fn define_steel_module(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    define_module_inner(args, input, quote! { ::steel })
+}
+
+#[proc_macro_attribute]
 pub fn define_module(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    define_module_inner(args, input, quote! { crate })
+}
+
+fn define_module_inner(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+    prefix: proc_macro2::TokenStream,
 ) -> proc_macro::TokenStream {
     let args = parse_macro_input!(args with Punctuated::<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(input as ItemFn);
@@ -732,7 +748,7 @@ pub fn define_module(
 
                 let mut module = #function_name();
 
-                module.register_doc(#value, crate::steel_vm::builtin::MarkdownDoc(#doc_comments.into()));
+                module.register_doc(#value, #prefix::steel_vm::builtin::MarkdownDoc(#doc_comments.into()));
 
                 module
             }
@@ -1051,12 +1067,31 @@ pub fn native_mut(
 
     output.into()
 }
-// See REmacs : https://github.com/remacs/remacs/blob/16b6fb9319a6d48fbc7b27d27c3234990f6718c5/rust_src/remacs-macros/lib.rs#L17-L161
-// TODO: Pass the new name in to this function
+
+/// Same as `declare_steel_function` but with builtin path tuned for use inside of `steel` itself
 #[proc_macro_attribute]
 pub fn function(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    function_inner(args, input, quote! { crate })
+}
+
+/// Declare a function to be used in scheme.
+#[proc_macro_attribute]
+pub fn declare_steel_function(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    function_inner(args, input, quote! { ::steel })
+}
+
+// See REmacs : https://github.com/remacs/remacs/blob/16b6fb9319a6d48fbc7b27d27c3234990f6718c5/rust_src/remacs-macros/lib.rs#L17-L161
+// TODO: Pass the new name in to this function
+fn function_inner(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+    prefix: proc_macro2::TokenStream,
 ) -> proc_macro::TokenStream {
     let args = parse_macro_input!(args with Punctuated::<Meta, Token![,]>::parse_terminated);
 
@@ -1217,11 +1252,11 @@ pub fn function(
 
     let function_type = if promote_to_mutable {
         quote! {
-            crate::steel_vm::builtin::BuiltInFunctionType::Mutable(#copied_function_name)
+            #prefix::steel_vm::builtin::BuiltInFunctionType::Mutable(#copied_function_name)
         }
     } else {
         quote! {
-            crate::steel_vm::builtin::BuiltInFunctionType::Reference(#copied_function_name)
+            #prefix::steel_vm::builtin::BuiltInFunctionType::Reference(#copied_function_name)
         }
     };
 
@@ -1231,17 +1266,17 @@ pub fn function(
     };
 
     let doc_field = if let Some(doc) = maybe_doc_comments {
-        quote! { Some(crate::steel_vm::builtin::MarkdownDoc::from_str(#doc)) }
+        quote! { Some(#prefix::steel_vm::builtin::MarkdownDoc::from_str(#doc)) }
     } else {
         quote! { None }
     };
 
     let definition_struct = quote! {
-        pub const #doc_name: crate::steel_vm::builtin::NativeFunctionDefinition = crate::steel_vm::builtin::NativeFunctionDefinition {
+        pub const #doc_name: #prefix::steel_vm::builtin::NativeFunctionDefinition = #prefix::steel_vm::builtin::NativeFunctionDefinition {
             name: #value,
             aliases: #aliases,
             func: #function_type,
-            arity: crate::steel_vm::builtin::Arity::#arity_exactness(#arity_number),
+            arity: #prefix::steel_vm::builtin::Arity::#arity_exactness(#arity_number),
             doc: #doc_field,
             is_const: #is_const,
             signature: None,
@@ -1274,17 +1309,17 @@ pub fn function(
 
             #definition_struct
 
-            pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, crate::rerrs::SteelErr> {
+            pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
 
-                use crate::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
+                use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
 
                 if args.len() < #arity_number {
-                    crate::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
+                    #prefix::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
                 }
 
-                fn err_thunk(mut err: crate::rerrs::SteelErr) -> crate::rerrs::SteelErr {
+                fn err_thunk(mut err: #prefix::rerrs::SteelErr) -> #prefix::rerrs::SteelErr {
                     err.prepend_message(#function_name_with_colon);
-                    err.set_kind(crate::rerrs::ErrorKind::TypeMismatch);
+                    err.set_kind(#prefix::rerrs::ErrorKind::TypeMismatch);
                     err
                 };
 
@@ -1331,18 +1366,18 @@ pub fn function(
 
                 #definition_struct
 
-                pub fn #copied_function_name(args: &mut [SteelVal]) -> std::result::Result<SteelVal, crate::rerrs::SteelErr> {
+                pub fn #copied_function_name(args: &mut [SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
 
-                    use crate::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef, PrimitiveAsRefMut};
+                    use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef, PrimitiveAsRefMut};
 
                     // if args.len() != #arity_number {
-                    //     crate::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
+                    //     #prefix::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
                     // }
 
 
-                    fn err_thunk(mut err: crate::rerrs::SteelErr) -> crate::rerrs::SteelErr {
+                    fn err_thunk(mut err: #prefix::rerrs::SteelErr) -> #prefix::rerrs::SteelErr {
                         err.prepend_message(#function_name_with_colon);
-                        err.set_kind(crate::rerrs::ErrorKind::TypeMismatch);
+                        err.set_kind(#prefix::rerrs::ErrorKind::TypeMismatch);
                         err
                     };
 
@@ -1359,7 +1394,7 @@ pub fn function(
 
                         #ret_val
                     } else {
-                        crate::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
+                        #prefix::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
 
                     }
 
@@ -1392,18 +1427,18 @@ pub fn function(
 
         #definition_struct
 
-        pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, crate::rerrs::SteelErr> {
+        pub fn #copied_function_name(args: &[SteelVal]) -> std::result::Result<SteelVal, #prefix::rerrs::SteelErr> {
 
-            use crate::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
+            use #prefix::rvals::{IntoSteelVal, FromSteelVal, PrimitiveAsRef};
 
             if args.len() != #arity_number {
-                crate::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
+                #prefix::stop!(ArityMismatch => format!("{} expected {} arguments, got {}", #value, #arity_number.to_string(), args.len()))
             }
 
 
-            fn err_thunk(mut err: crate::rerrs::SteelErr) -> crate::rerrs::SteelErr {
+            fn err_thunk(mut err: #prefix::rerrs::SteelErr) -> #prefix::rerrs::SteelErr {
                 err.prepend_message(#function_name_with_colon);
-                err.set_kind(crate::rerrs::ErrorKind::TypeMismatch);
+                err.set_kind(#prefix::rerrs::ErrorKind::TypeMismatch);
                 err
             };
 
